@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  async rewrites() {
+    return [
+      { source: "/icon-192.png", destination: "/icon" },
+      { source: "/icon-512.png", destination: "/icon" },
+    ];
+  },
   async headers() {
     return [
       {
