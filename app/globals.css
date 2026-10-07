@@ -504,3 +504,30 @@ select.text-field { color-scheme: dark; }
   .tab-panel, .tab-panel.is-exiting { animation: none; }
   .button-spinner { animation: none; border-right-color: currentColor; }
 }
+
+/* Submenú de filtros avanzados sin eliminar funciones */
+.filter-controls.collapsed {
+  display: none;
+}
+.filter-controls.open {
+  display: block;
+}
+.filter-toggle {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+}
+
+/* Submenú de acciones secundarias en tarjeta */
+.card-submenu {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px dashed rgba(0,0,0,0.15);
+}
+.card-submenu .btn,
+.card-submenu .btn-ghost {
+  font-size: 0.82rem;
+  padding: 0.3rem 0.5rem;
+}

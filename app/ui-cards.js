@@ -14,6 +14,7 @@ export function dato(valor, etiqueta) {
 }
 
 export function Tarjeta({ l, fav, enComparar, onFav, onGo, onOpen, onComp }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const abierto = estaAbierto(l.horario);
   return (
     <article className="card venue-card">
@@ -38,25 +39,42 @@ export function Tarjeta({ l, fav, enComparar, onFav, onGo, onOpen, onComp }) {
       <div className="row-btns card-actions">
         <button type="button" className="btn primary" onClick={onOpen}>Ver ficha</button>
         <button type="button" className="btn" onClick={onGo}>Cómo llegar</button>
-        {onComp && (
+        {(onComp || onFav) && (
           <button
             type="button"
-            className={enComparar ? "btn primary" : "btn"}
-            aria-pressed={Boolean(enComparar)}
-            onClick={onComp}
+            className="btn btn-ghost"
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? "Ocultar más acciones" : "Más acciones"}
+            onClick={() => setMenuOpen((v) => !v)}
           >
-            {enComparar ? "Quitar de comparar" : "Comparar"}
+            {menuOpen ? "▲ Menos" : "▼ Más"}
           </button>
         )}
-        <button
-          type="button"
-          className="btn-ghost favorite-button"
-          aria-pressed={Boolean(fav)}
-          aria-label={fav ? `Quitar ${l.nombre} de favoritos` : `Guardar ${l.nombre} en favoritos`}
-          onClick={onFav}
-        >
-          {fav ? "Guardado" : "Guardar"}
-        </button>
+        {menuOpen && (
+          <div className="card-submenu" role="menu" aria-label="Acciones adicionales">
+            {onComp && (
+              <button
+                type="button"
+                className={enComparar ? "btn primary" : "btn"}
+                aria-pressed={Boolean(enComparar)}
+                onClick={onComp}
+                role="menuitem"
+              >
+                {enComparar ? "Quitar de comparar" : "Comparar"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn-ghost favorite-button"
+              aria-pressed={Boolean(fav)}
+              aria-label={fav ? `Quitar ${l.nombre} de favoritos` : `Guardar ${l.nombre} en favoritos`}
+              onClick={onFav}
+              role="menuitem"
+            >
+              {fav ? "Guardado" : "Guardar"}
+            </button>
+          </div>
+        )}
       </div>
     </article>
   );
