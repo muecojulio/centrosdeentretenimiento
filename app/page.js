@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ATAJOS, CIUDADES, FILTROS } from "../lib/ciudades";
+import { CIUDADES, FILTROS } from "../lib/ciudades";
 import { estaAbierto, esAfter } from "../lib/enriquecer";
-import { ActionButton, ScrollRail, SearchableCombobox, useActionFeedback } from "./ui-interactions";
+import { ActionButton, ScrollRail, SearchableMultiCombobox, useActionFeedback } from "./ui-interactions";
 import { Tarjeta, Detalle } from "./ui-cards";
 
 const SECCIONES = [
@@ -15,6 +15,8 @@ const SECCIONES = [
 ];
 
 const OPCIONES_CIUDAD = CIUDADES.map((ciudad) => ({ value: ciudad.id, label: ciudad.nombre }));
+const OPCIONES_CATEGORIA = FILTROS.filter((filtro) => filtro.id !== "todo")
+  .map((filtro) => ({ value: filtro.id, label: filtro.etiqueta }));
 const CONTROLES_INTERACTIVOS = [
   "button",
   "a[href]",
@@ -40,16 +42,19 @@ const CONTROLES_INTERACTIVOS = [
 export default function Page() {
   const [tab, setTab] = useState("explorar");
   const activeTab = tab === "detalle" ? "explorar" : tab;
-  const [ciudad, setCiudad] = useState(CIUDADES[0]);
-  const [filtro, setFiltro] = useState("todo");
+  const [ciudadesSeleccionadas, setCiudadesSeleccionadas] = useState([CIUDADES[0].id]);
+  const ciudad = CIUDADES.find((item) => item.id === ciudadesSeleccionadas[0]) || CIUDADES[0];
+  const [filtros, setFiltros] = useState([]);
   const [q, setQ] = useState("");
-  const [origen, setOrigen] = useState({ lat: CIUDADES[0].lat, lon: CIUDADES[0].lon, etiqueta: "CDMX centro" });
+  const [origen, setOrigen] = useState({ lat: CIUDADES[0].lat, lon: CIUDADES[0].lon, etiqueta: CIUDADES[0].nombre });
+  const [ubicacionPersonal, setUbicacionPersonal] = useState(false);
   const [lugares, setLugares] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [sel, setSel] = useState(null);
   const [favs, setFavs] = useState([]);
   const [ruta, setRuta] = useState(null);
+  const [rutaOrigen, setRutaOrigen] = useState(null);
   const [rutaError, setRutaError] = useState("");
   const [rutaCargando, setRutaCargando] = useState(false);
   const [soloAbiertos, setSoloAbiertos] = useState(false);
@@ -80,10 +85,18 @@ export default function Page() {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
 
+  // La selección múltiple de ciudades se confirma al cerrar el combo o al pulsar Buscar.
   useEffect(() => {
     if (!listoPrefs) return;
-    buscar(origen.lat, origen.lon, radio, q);
-  }, [listoPrefs, ciudad.id, radio]);
+    if (ubicacionPersonal) {
+      buscar(origen.lat, origen.lon, radio, q, origen.etiqueta);
+      return;
+    }
+    const ciudades = ciudadesSeleccionadas
+      .map((id) => CIUDADES.find((item) => item.id === id))
+      .filter(Boolean);
+    if (ciudades.length) buscarEnCiudades(ciudades, radio, q);
+  }, [listoPrefs, radio, ubicacionPersonal]);
 
   useEffect(() => {
     fetch(`/api/sol?lat=${origen.lat}&lon=${origen.lon}`)
@@ -103,16 +116,23 @@ export default function Page() {
   }, []);
 
   const lista = useMemo(() => lugares.filter((lugar) => {
-    if (filtro !== "todo" && filtro !== "playa" && filtro !== "tarde" && filtro !== "afters" && lugar.tipo !== filtro) return false;
-    if (filtro === "table" && !(lugar.tableDance || lugar.tipo === "table")) return false;
-    if (filtro === "afters" && !(lugar.after || esAfter(lugar.horario, lugar.tipo, lugar.nombre) || lugar.tipo === "antro")) return false;
+    const filtrosAplicables = filtros.filter((id) => id !== "playa" && id !== "tarde");
+    if (filtrosAplicables.length > 0) {
+      const coincideCategoria = filtrosAplicables.some((id) => {
+        if (id === "table") return lugar.tableDance || lugar.tipo === "table";
+        if (id === "afters") return lugar.after || esAfter(lugar.horario, lugar.tipo, lugar.nombre) || lugar.tipo === "antro";
+        return lugar.tipo === id;
+      });
+      if (!coincideCategoria) return false;
+    }
     if (soloAbiertos && estaAbierto(lugar.horario) !== true) return false;
     return true;
-  }).sort((a, b) => (a.metros || 0) - (b.metros || 0)), [lugares, filtro, soloAbiertos]);
+  }).sort((a, b) => (a.metros || 0) - (b.metros || 0)), [lugares, filtros, soloAbiertos]);
 
-  async function buscar(lat, lon, r, texto) {
-    const query = texto || "";
-    const requestKey = `${lat}|${lon}|${r}|${query}`;
+  async function buscarEnPuntos(puntos, r, texto) {
+    const query = (texto || "").trim();
+    if (!puntos.length) return;
+    const requestKey = `${puntos.map((punto) => `${punto.key}:${punto.lat}:${punto.lon}`).join(",")}|${r}|${query}`;
     if (searchRequestRef.current?.key === requestKey) return;
 
     searchRequestRef.current?.controller.abort();
@@ -124,15 +144,72 @@ export default function Page() {
     setBuscarEstado("loading");
 
     try {
-      const response = await fetch(
-        `/api/places?lat=${lat}&lon=${lon}&radio=${r}&q=${encodeURIComponent(query)}`,
-        { signal: controller.signal },
-      );
-      const data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || "No pude cargar lugares.");
-      if (searchRequestRef.current !== request) return;
-      setLugares(data.lugares || []);
-      setBuscarEstado("success");
+      const resultados = [];
+      const fallos = [];
+      let siguiente = 0;
+      const worker = async () => {
+        while (siguiente < puntos.length && !controller.signal.aborted) {
+          const punto = puntos[siguiente];
+          siguiente += 1;
+          try {
+            const response = await fetch(
+              `/api/places?lat=${punto.lat}&lon=${punto.lon}&radio=${r}&q=${encodeURIComponent(query)}`,
+              { signal: controller.signal },
+            );
+            const data = await response.json();
+            if (!response.ok || data.error) throw new Error(data.error || "No pude cargar lugares.");
+            resultados.push({ punto, lugares: data.lugares || [] });
+          } catch (requestError) {
+            if (requestError.name === "AbortError") return;
+            fallos.push({ punto, error: requestError });
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.min(3, puntos.length) }, () => worker()));
+      if (controller.signal.aborted || searchRequestRef.current !== request) return;
+      if (resultados.length === 0) {
+        setLugares([]);
+        throw new Error(fallos[0]?.error.message || "No pude cargar lugares.");
+      }
+
+      const combinados = new Map();
+      for (const { punto, lugares: lugaresDePunto } of resultados) {
+        for (const lugar of lugaresDePunto) {
+          const coordenadas = `${Number(lugar.lat).toFixed(5)}|${Number(lugar.lon).toFixed(5)}`;
+          const clave = `${String(lugar.nombre || "").trim().toLocaleLowerCase("es-MX")}|${coordenadas}`;
+          const candidato = {
+            ...lugar,
+            ...(punto.ciudadNombre ? { ciudadNombre: punto.ciudadNombre } : {}),
+            origenBusqueda: { lat: punto.lat, lon: punto.lon, etiqueta: punto.etiqueta },
+          };
+          const existente = combinados.get(clave);
+          if (!existente) {
+            combinados.set(clave, candidato);
+          } else {
+            const candidatoMasCerca = (candidato.metros ?? Infinity) < (existente.metros ?? Infinity);
+            const principal = candidatoMasCerca ? candidato : existente;
+            const secundario = candidatoMasCerca ? existente : candidato;
+            combinados.set(clave, {
+              ...secundario,
+              ...principal,
+              telefono: principal.telefono || secundario.telefono,
+              direccion: principal.direccion || secundario.direccion,
+              web: principal.web || secundario.web,
+            });
+          }
+        }
+      }
+
+      setLugares([...combinados.values()].sort((a, b) => (a.metros ?? Infinity) - (b.metros ?? Infinity)));
+      if (fallos.length > 0) {
+        const ciudadesConFallo = fallos.map(({ punto }) => punto.etiqueta).join(", ");
+        setError(`No se pudieron cargar resultados de: ${ciudadesConFallo}.`);
+        setBuscarEstado("error");
+      } else {
+        setError("");
+        setBuscarEstado("success");
+      }
     } catch (requestError) {
       if (requestError.name === "AbortError" || searchRequestRef.current !== request) return;
       setError(requestError.message || "No pude cargar lugares.");
@@ -145,12 +222,45 @@ export default function Page() {
     }
   }
 
-  function elegirCiudad(nextCity) {
-    if (!nextCity) return;
-    setCiudad(nextCity);
-    const nextOrigin = { lat: nextCity.lat, lon: nextCity.lon, etiqueta: nextCity.nombre };
-    setOrigen(nextOrigin);
-    buscar(nextOrigin.lat, nextOrigin.lon, radio, q);
+  function buscar(lat, lon, r, texto, etiqueta = origen.etiqueta) {
+    return buscarEnPuntos([{ key: `punto:${lat}:${lon}`, lat, lon, etiqueta }], r, texto);
+  }
+
+  function buscarEnCiudades(ciudades, r, texto) {
+    return buscarEnPuntos(ciudades.map((item) => ({
+      key: item.id,
+      lat: item.lat,
+      lon: item.lon,
+      etiqueta: item.nombre,
+      ciudadNombre: item.nombre,
+    })), r, texto);
+  }
+
+  function buscarSeleccionActual(texto = q) {
+    if (ubicacionPersonal) return buscar(origen.lat, origen.lon, radio, texto, origen.etiqueta);
+    const ciudades = ciudadesSeleccionadas
+      .map((id) => CIUDADES.find((item) => item.id === id))
+      .filter(Boolean);
+    if (ciudades.length) return buscarEnCiudades(ciudades, radio, texto);
+
+    searchRequestRef.current?.controller.abort();
+    searchRequestRef.current = null;
+    setCargando(false);
+    setLugares([]);
+    setError("Selecciona al menos una ciudad o usa Mi ubicación para buscar.");
+    setBuscarEstado("error");
+  }
+
+  function elegirCiudades(nextIds) {
+    const siguientes = [...new Set(nextIds)]
+      .map((id) => CIUDADES.find((item) => item.id === id))
+      .filter(Boolean);
+    const ciudadPrincipal = siguientes[0];
+    setCiudadesSeleccionadas(siguientes.map((item) => item.id));
+    setUbicacionPersonal(false);
+    if (ciudadPrincipal) {
+      setOrigen({ lat: ciudadPrincipal.lat, lon: ciudadPrincipal.lon, etiqueta: ciudadPrincipal.nombre });
+    }
   }
 
   function usarGPS() {
@@ -169,8 +279,10 @@ export default function Page() {
         etiqueta: "Mi ubicación",
       };
       setOrigen(nextOrigin);
+      setCiudadesSeleccionadas([]);
+      setUbicacionPersonal(true);
       setGpsEstado("success");
-      buscar(nextOrigin.lat, nextOrigin.lon, radio, q);
+      buscar(nextOrigin.lat, nextOrigin.lon, radio, q, nextOrigin.etiqueta);
     }, (gpsError) => {
       const message = gpsError.code === 1
         ? "No se concedió el permiso de ubicación. Puedes elegir una ciudad manualmente."
@@ -194,9 +306,10 @@ export default function Page() {
     });
   }
 
-  async function comoLlegar(lugar) {
+  async function comoLlegar(lugar, origenForzado = null) {
     if (!lugar) return;
-    const requestKey = `${origen.lat}|${origen.lon}|${lugar.lat}|${lugar.lon}|${perfilRuta}`;
+    const puntoSalida = origenForzado || lugar.origenBusqueda || origen;
+    const requestKey = `${puntoSalida.lat}|${puntoSalida.lon}|${lugar.lat}|${lugar.lon}|${perfilRuta}`;
     if (routeRequestRef.current?.key === requestKey) return;
 
     routeRequestRef.current?.controller.abort();
@@ -204,6 +317,7 @@ export default function Page() {
     const request = { key: requestKey, controller };
     routeRequestRef.current = request;
     setSel(lugar);
+    setRutaOrigen(puntoSalida);
     cambiarSeccion("llegar", true);
     setRuta(null);
     setRutaError("");
@@ -211,7 +325,7 @@ export default function Page() {
 
     try {
       const response = await fetch(
-        `/api/ruta?perfil=${perfilRuta}&fromLat=${origen.lat}&fromLon=${origen.lon}&toLat=${lugar.lat}&toLon=${lugar.lon}`,
+        `/api/ruta?perfil=${perfilRuta}&fromLat=${puntoSalida.lat}&fromLon=${puntoSalida.lon}&toLat=${lugar.lat}&toLon=${lugar.lon}`,
         { signal: controller.signal },
       );
       const data = await response.json();
@@ -246,18 +360,43 @@ export default function Page() {
       if (mapRef.current) {
         try { mapRef.current.remove(); } catch {}
       }
-      const map = window.L.map(mapBox.current).setView([origen.lat, origen.lon], 14);
+      const map = window.L.map(mapBox.current);
       mapRef.current = map;
       window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap",
       }).addTo(map);
-      window.L.marker([origen.lat, origen.lon]).addTo(map).bindPopup("Partida");
-      lista.slice(0, 40).forEach((lugar) => {
-        window.L.marker([lugar.lat, lugar.lon]).addTo(map).bindPopup(lugar.nombre);
+
+      const puntosMapa = tab === "mapa" && !ubicacionPersonal
+        ? ciudadesSeleccionadas
+          .map((id) => CIUDADES.find((item) => item.id === id))
+          .filter(Boolean)
+        : [tab === "llegar" && rutaOrigen ? rutaOrigen : origen];
+      const posiciones = puntosMapa.map((punto) => [punto.lat, punto.lon]);
+      if (tab === "llegar" && sel) posiciones.push([sel.lat, sel.lon]);
+      const bounds = window.L.latLngBounds(posiciones);
+      if (posiciones.length > 1 && bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
+      } else {
+        map.setView(posiciones[0] || [origen.lat, origen.lon], 14);
+      }
+
+      puntosMapa.forEach((punto) => {
+        window.L.marker([punto.lat, punto.lon]).addTo(map).bindPopup(`Partida: ${punto.nombre || punto.etiqueta}`);
       });
+      if (tab === "llegar" && sel) {
+        window.L.marker([sel.lat, sel.lon]).addTo(map).bindPopup(sel.nombre);
+        const coordenadasRuta = ruta?.geometria?.coordinates;
+        if (Array.isArray(coordenadasRuta)) {
+          window.L.polyline(coordenadasRuta.map(([lon, lat]) => [lat, lon]), { color: "#c8ff4d", weight: 5 }).addTo(map);
+        }
+      } else {
+        lista.slice(0, 40).forEach((lugar) => {
+          window.L.marker([lugar.lat, lugar.lon]).addTo(map).bindPopup(lugar.nombre);
+        });
+      }
     })();
     return () => { cancelled = true; };
-  }, [tab, lista, origen]);
+  }, [tab, lista, origen, ciudadesSeleccionadas, ubicacionPersonal, rutaOrigen, sel, ruta]);
 
   function cambiarSeccion(nextTab, focusTab = false) {
     const nextPanel = nextTab === "detalle" ? "explorar" : nextTab;
@@ -394,9 +533,10 @@ export default function Page() {
             {panelTab === "detalle" && id === "explorar" && sel && (
               <Detalle
                 l={sel}
-                ciudad={ciudad.nombre}
+                ciudad={sel.ciudadNombre || (ubicacionPersonal || ciudadesSeleccionadas.length === 0 ? origen.etiqueta : ciudad.nombre)}
                 onBack={() => cambiarSeccion("explorar", true)}
                 onGo={() => comoLlegar(sel)}
+                onGoGPS={(puntoSalida) => comoLlegar(sel, puntoSalida)}
                 onFav={() => toggleFav(sel)}
                 fav={favs.some((favorite) => favorite.id === sel.id)}
               />
@@ -406,35 +546,18 @@ export default function Page() {
               <section aria-label="Explorar lugares">
                 <form className="search" onSubmit={(event) => {
                   event.preventDefault();
-                  buscar(origen.lat, origen.lon, radio, q);
+                  buscarSeleccionActual(q);
                 }}>
-                  <SearchableCombobox
+                  <SearchableMultiCombobox
                     id="city-picker"
                     label="Ciudad"
                     options={OPCIONES_CIUDAD}
-                    value={ciudad.id}
-                    onChange={(value) => elegirCiudad(CIUDADES.find((item) => item.id === value))}
+                    values={ciudadesSeleccionadas}
+                    onChange={elegirCiudades}
+                    onCommit={buscarSeleccionActual}
+                    placeholder="Busca y selecciona ciudades"
+                    description="Selecciona una o varias ciudades; usa Buscar para combinarlas."
                   />
-
-                  <ScrollRail label="Atajos de ciudad" className="chip-row" selectedKey={ciudad.id}>
-                    {ATAJOS.map((idCiudad) => {
-                      const shortcutCity = CIUDADES.find((item) => item.id === idCiudad);
-                      if (!shortcutCity) return null;
-                      const selected = ciudad.id === idCiudad;
-                      return (
-                        <button
-                          key={idCiudad}
-                          type="button"
-                          className={selected ? "chip on" : "chip"}
-                          aria-pressed={selected}
-                          data-rail-selected={selected ? "true" : undefined}
-                          onClick={() => elegirCiudad(shortcutCity)}
-                        >
-                          {shortcutCity.nombre}
-                        </button>
-                      );
-                    })}
-                  </ScrollRail>
 
                   <div className="field">
                     <label className="field-label" htmlFor="place-query">Nombre o tipo de lugar</label>
@@ -481,23 +604,15 @@ export default function Page() {
                     {showAdvancedFilters ? "▲ Ocultar filtros avanzados" : "▼ Filtros avanzados"}
                   </button>
                   <div id="advanced-filters-panel" className={showAdvancedFilters ? "filter-controls open" : "filter-controls collapsed"}>
-                    <ScrollRail label="Categorías de lugares" className="chip-row" selectedKey={filtro}>
-                      {FILTROS.map((item) => {
-                        const selected = filtro === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className={selected ? "chip on" : "chip"}
-                            aria-pressed={selected}
-                            data-rail-selected={selected ? "true" : undefined}
-                            onClick={() => setFiltro(item.id)}
-                          >
-                            {item.etiqueta}
-                          </button>
-                        );
-                      })}
-                    </ScrollRail>
+                    <SearchableMultiCombobox
+                      id="category-picker"
+                      label="Categorías"
+                      options={OPCIONES_CATEGORIA}
+                      values={filtros}
+                      onChange={setFiltros}
+                      placeholder="Busca una o varias categorías"
+                      description="Sin categorías seleccionadas se muestran todas."
+                    />
                     <div className="filter-bottom-row">
                       <div className="field radius-field">
                         <label className="field-label" htmlFor="search-radius">Radio de búsqueda</label>
@@ -565,7 +680,7 @@ export default function Page() {
             {panelTab === "llegar" && id === "llegar" && (
               <section className="sheet route-sheet" aria-labelledby="route-title" aria-busy={rutaCargando}>
                 <h2 id="route-title">Cómo llegar</h2>
-                <p className="meta">{origen.etiqueta} → {sel?.nombre || "elige un lugar"}</p>
+                <p className="meta">{rutaOrigen?.etiqueta || origen.etiqueta} → {sel?.nombre || "elige un lugar"}</p>
                 <div
                   className="map"
                   ref={mapBox}
