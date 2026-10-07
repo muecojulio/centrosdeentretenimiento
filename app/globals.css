@@ -473,9 +473,34 @@ select.text-field { color-scheme: dark; }
 .map iframe, .map .leaflet { height: 100%; width: 100%; border: 0; }
 .aviso { font-size: 0.82rem; color: var(--muted); background: #120c1c; border: 1px dashed var(--line); padding: 10px; border-radius: 12px; margin: 8px 0 12px; line-height: 1.5; }
 .error-message { border-color: #a74b5a; color: #ffe3e6; background: #27131a; }
-.qr { text-align: center; }
-.qr img { background: #fff; padding: 8px; border-radius: 12px; }
-.sheet h2 { margin: 0 0 8px; font-size: 1.15rem; }
+.sheet {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--card), var(--card2));
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+.sheet h2 { margin: 0 0 12px; font-size: 1.15rem; }
+.install-sheet, .privacy-sheet { max-width: 680px; margin-inline: auto; }
+.install-intro { margin: 0; line-height: 1.5; }
+.qr { display: flex; justify-content: center; margin: 20px 0; }
+.qr svg {
+  display: block;
+  width: min(100%, 256px);
+  height: auto;
+  padding: 10px;
+  border-radius: 16px;
+  background: #fff;
+}
+.install-help { margin: 0; }
+.install-link { margin: 12px 0 0; text-align: center; font-size: 0.78rem; overflow-wrap: anywhere; }
+.install-link a { color: var(--accent); }
+.privacy-sheet h2 { margin-bottom: 16px; }
+.privacy-sheet h3 { margin: 20px 0 6px; font-size: 0.98rem; }
+.privacy-sheet p, .privacy-sheet ul { line-height: 1.6; }
+.privacy-sheet ul { padding-left: 1.25rem; color: var(--muted); font-size: 0.88rem; }
+.privacy-updated { color: var(--muted); font-size: 0.8rem; }
 .back-button { margin-bottom: 12px; }
 .empty { text-align: center; color: var(--muted); padding: 28px 8px; line-height: 1.5; }
 .loading-message { padding: 8px; }
