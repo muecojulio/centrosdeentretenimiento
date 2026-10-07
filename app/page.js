@@ -4,11 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CIUDADES, FILTROS } from "../lib/ciudades";
 import { estaAbierto, esAfter } from "../lib/enriquecer";
 import { ActionButton, ScrollRail, SearchableMultiCombobox, useActionFeedback } from "./ui-interactions";
-import { Tarjeta, Detalle } from "./ui-cards";
+import { Tarjeta, Detalle, IndicacionesVoz } from "./ui-cards";
 
 const SECCIONES = [
   ["explorar", "Explorar"],
-  ["mapa", "Mapa"],
   ["favoritos", "Favoritos"],
   ["llegar", "Llegar"],
   ["instalar", "Instalar"],
@@ -344,7 +343,7 @@ export default function Page() {
   }
 
   useEffect(() => {
-    if (tab !== "mapa" && tab !== "llegar") return undefined;
+    if (tab !== "llegar") return undefined;
     let cancelled = false;
     (async () => {
       if (!window.L) {
@@ -366,13 +365,9 @@ export default function Page() {
         attribution: "&copy; OpenStreetMap",
       }).addTo(map);
 
-      const puntosMapa = tab === "mapa" && !ubicacionPersonal
-        ? ciudadesSeleccionadas
-          .map((id) => CIUDADES.find((item) => item.id === id))
-          .filter(Boolean)
-        : [tab === "llegar" && rutaOrigen ? rutaOrigen : origen];
-      const posiciones = puntosMapa.map((punto) => [punto.lat, punto.lon]);
-      if (tab === "llegar" && sel) posiciones.push([sel.lat, sel.lon]);
+      const puntoSalida = rutaOrigen || origen;
+      const posiciones = [[puntoSalida.lat, puntoSalida.lon]];
+      if (sel) posiciones.push([sel.lat, sel.lon]);
       const bounds = window.L.latLngBounds(posiciones);
       if (posiciones.length > 1 && bounds.isValid()) {
         map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
@@ -380,31 +375,25 @@ export default function Page() {
         map.setView(posiciones[0] || [origen.lat, origen.lon], 14);
       }
 
-      puntosMapa.forEach((punto) => {
-        window.L.marker([punto.lat, punto.lon]).addTo(map).bindPopup(`Partida: ${punto.nombre || punto.etiqueta}`);
-      });
-      if (tab === "llegar" && sel) {
+      window.L.marker([puntoSalida.lat, puntoSalida.lon])
+        .addTo(map)
+        .bindPopup(`Partida: ${puntoSalida.nombre || puntoSalida.etiqueta}`);
+      if (sel) {
         window.L.marker([sel.lat, sel.lon]).addTo(map).bindPopup(sel.nombre);
         const coordenadasRuta = ruta?.geometria?.coordinates;
         if (Array.isArray(coordenadasRuta)) {
           window.L.polyline(coordenadasRuta.map(([lon, lat]) => [lat, lon]), { color: "#c8ff4d", weight: 5 }).addTo(map);
         }
-      } else {
-        lista.slice(0, 40).forEach((lugar) => {
-          window.L.marker([lugar.lat, lugar.lon]).addTo(map).bindPopup(lugar.nombre);
-        });
       }
     })();
     return () => { cancelled = true; };
-  }, [tab, lista, origen, ciudadesSeleccionadas, ubicacionPersonal, rutaOrigen, sel, ruta]);
+  }, [tab, origen, rutaOrigen, sel, ruta]);
 
   function cambiarSeccion(nextTab, focusTab = false) {
     const nextPanel = nextTab === "detalle" ? "explorar" : nextTab;
-    const mapConflict = (activeTab === "mapa" && nextPanel === "llegar")
-      || (activeTab === "llegar" && nextPanel === "mapa");
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-    if (nextPanel !== activeTab && !mapConflict && !reduceMotion) {
+    if (nextPanel !== activeTab && !reduceMotion) {
       setSalidaPanel({ id: activeTab, tab });
       if (exitPanelTimerRef.current) clearTimeout(exitPanelTimerRef.current);
       exitPanelTimerRef.current = setTimeout(() => {
@@ -477,9 +466,6 @@ export default function Page() {
           <Tarjeta
             key={lugar.id}
             l={lugar}
-            fav={favs.some((favorite) => favorite.id === lugar.id)}
-            onFav={() => toggleFav(lugar)}
-            onGo={() => comoLlegar(lugar)}
             onOpen={() => abrirDetalle(lugar)}
           />
         ))}
@@ -535,7 +521,6 @@ export default function Page() {
                 l={sel}
                 ciudad={sel.ciudadNombre || (ubicacionPersonal || ciudadesSeleccionadas.length === 0 ? origen.etiqueta : ciudad.nombre)}
                 onBack={() => cambiarSeccion("explorar", true)}
-                onGo={() => comoLlegar(sel)}
                 onGoGPS={(puntoSalida) => comoLlegar(sel, puntoSalida)}
                 onFav={() => toggleFav(sel)}
                 fav={favs.some((favorite) => favorite.id === sel.id)}
@@ -657,17 +642,6 @@ export default function Page() {
               </section>
             )}
 
-            {panelTab === "mapa" && id === "mapa" && (
-              <section aria-label="Mapa de lugares cercanos">
-                <div
-                  className="map"
-                  ref={mapBox}
-                  role="region"
-                  aria-label="Mapa interactivo con tu ubicación y lugares cercanos"
-                />
-              </section>
-            )}
-
             {panelTab === "favoritos" && id === "favoritos" && (
               <section aria-label="Lugares guardados">
                 <h2 className="section-title">Tus favoritos</h2>
@@ -695,6 +669,7 @@ export default function Page() {
                       {ruta.metros ? `${(ruta.metros / 1000).toFixed(1)} km` : ""}
                       {ruta.minutos ? ` · ${ruta.minutos} min aprox.` : ""}
                     </p>
+                    {ruta.pasos?.some((paso) => paso?.texto) && <IndicacionesVoz ruta={ruta} />}
                     {ruta.pasos?.map((paso, index) => (
                       <article className="card route-step" key={`${index}-${paso.texto}`}>
                         <b>{index + 1}. {paso.texto}</b>

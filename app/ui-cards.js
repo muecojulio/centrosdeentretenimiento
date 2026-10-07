@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { estaAbierto, esAfter, textoDistancia, textoTiempo } from "../lib/enriquecer";
 import { ActionButton, useActionFeedback } from "./ui-interactions";
 
@@ -13,8 +13,7 @@ export function dato(valor, etiqueta) {
   );
 }
 
-export function Tarjeta({ l, fav, enComparar, onFav, onGo, onOpen, onComp }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+export function Tarjeta({ l, onOpen }) {
   const abierto = estaAbierto(l.horario);
   return (
     <article className="card venue-card">
@@ -28,7 +27,6 @@ export function Tarjeta({ l, fav, enComparar, onFav, onGo, onOpen, onComp }) {
         {(l.after || esAfter(l.horario, l.tipo, l.nombre)) && <span className="badge warn">After / madrugada</span>}
         {(l.tableDance || l.tipo === "table") && <span className="badge warn">Table dance</span>}
         {l.fuente === "INEGI DENUE" && <span className="badge ok">INEGI</span>}
-        {enComparar && <span className="badge ok">En comparación</span>}
       </div>
       <p className="meta">
         {textoDistancia(l.metros) ? `${textoDistancia(l.metros)} · ` : ""}
@@ -39,49 +37,98 @@ export function Tarjeta({ l, fav, enComparar, onFav, onGo, onOpen, onComp }) {
       {dato(l.musica, "Música")}
       <div className="row-btns card-actions">
         <button type="button" className="btn primary" onClick={onOpen}>Ver ficha</button>
-        <button type="button" className="btn" onClick={onGo}>Cómo llegar</button>
-        {(onComp || onFav) && (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            aria-expanded={menuOpen}
-            aria-label={menuOpen ? "Ocultar más acciones" : "Más acciones"}
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            {menuOpen ? "▲ Menos" : "▼ Más"}
-          </button>
-        )}
-        {menuOpen && (
-          <div className="card-submenu" role="menu" aria-label="Acciones adicionales">
-            {onComp && (
-              <button
-                type="button"
-                className={enComparar ? "btn primary" : "btn"}
-                aria-pressed={Boolean(enComparar)}
-                onClick={onComp}
-                role="menuitem"
-              >
-                {enComparar ? "Quitar de comparar" : "Comparar"}
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn-ghost favorite-button"
-              aria-pressed={Boolean(fav)}
-              aria-label={fav ? `Quitar ${l.nombre} de favoritos` : `Guardar ${l.nombre} en favoritos`}
-              onClick={onFav}
-              role="menuitem"
-            >
-              {fav ? "Guardado" : "Guardar"}
-            </button>
-          </div>
-        )}
       </div>
     </article>
   );
 }
 
-export function Detalle({ l, ciudad, onBack, onGo, onGoGPS, onFav, fav }) {
+export function IndicacionesVoz({ ruta }) {
+  const [hablando, setHablando] = useState(false);
+  const [error, setError] = useState("");
+  const utteranceRef = useRef(null);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      utteranceRef.current = null;
+    };
+  }, []);
+
+  function detener() {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    utteranceRef.current = null;
+    setHablando(false);
+  }
+
+  function escuchar() {
+    if (typeof window === "undefined" || !window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+      setError("Este navegador no permite reproducir indicaciones por voz.");
+      return;
+    }
+
+    const pasos = (ruta?.pasos || []).filter((paso) => paso?.texto);
+    if (pasos.length === 0) {
+      setError("Esta ruta no tiene indicaciones de voz disponibles.");
+      return;
+    }
+
+    setError("");
+    const distancia = ruta.metros ? `${(ruta.metros / 1000).toFixed(1)} kilómetros. ` : "";
+    const duracion = ruta.minutos ? `Tiempo estimado: ${ruta.minutos} minutos. ` : "";
+    const instrucciones = pasos.map((paso, index) => `Paso ${index + 1}. ${paso.texto}`);
+    const utterance = new window.SpeechSynthesisUtterance(
+      `Indicaciones de la ruta. ${distancia}${duracion}${instrucciones.join(". ")}`,
+    );
+    utterance.lang = "es-MX";
+    utterance.rate = 0.95;
+    utterance.onend = () => {
+      if (!mountedRef.current || utteranceRef.current !== utterance) return;
+      utteranceRef.current = null;
+      setHablando(false);
+    };
+    utterance.onerror = (event) => {
+      if (!mountedRef.current || utteranceRef.current !== utterance) return;
+      utteranceRef.current = null;
+      setHablando(false);
+      if (event.error !== "canceled" && event.error !== "interrupted") {
+        setError("No se pudieron reproducir las indicaciones. Inténtalo de nuevo.");
+      }
+    };
+
+    window.speechSynthesis.cancel();
+    utteranceRef.current = utterance;
+    setHablando(true);
+    window.speechSynthesis.speak(utterance);
+  }
+
+  return (
+    <div className="voice-guidance">
+      <button
+        type="button"
+        className={hablando ? "btn voice-button is-speaking" : "btn voice-button"}
+        aria-pressed={hablando}
+        onClick={hablando ? detener : escuchar}
+      >
+        <span aria-hidden="true">{hablando ? "■" : "🔊"}</span>
+        {hablando ? "Detener indicaciones" : "Escuchar indicaciones"}
+      </button>
+      <p className="meta">La voz leerá los pasos de la ruta en español.</p>
+      {error && <p className="aviso error-message" role="alert">{error}</p>}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {hablando ? "Reproduciendo las indicaciones de la ruta." : ""}
+      </span>
+    </div>
+  );
+}
+
+export function Detalle({ l, ciudad, onBack, onGoGPS, onFav, fav }) {
   const abierto = estaAbierto(l.horario);
   const [extra, setExtra] = useState(null);
   const [shareState, setShareState] = useActionFeedback();
@@ -100,7 +147,6 @@ export function Detalle({ l, ciudad, onBack, onGo, onGoGPS, onFav, fav }) {
   }, [l.id, l.nombre, l.lat, l.lon, l.web, l.wikidata, l.wikipedia, ciudad]);
 
   const maps = `https://www.google.com/maps/dir/?api=1&destination=${l.lat},${l.lon}`;
-  const apple = `https://maps.apple.com/?daddr=${l.lat},${l.lon}`;
   const uber = `https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${l.lat}&dropoff[longitude]=${l.lon}&dropoff[nickname]=${encodeURIComponent(l.nombre)}`;
   const tel = l.telefono ? "tel:" + String(l.telefono).replace(/\s/g, "") : null;
 
@@ -168,7 +214,6 @@ export function Detalle({ l, ciudad, onBack, onGo, onGoGPS, onFav, fav }) {
       {dato(l.telefono || extra?.wikidata?.tel, "Teléfono")}
       {extra?.clima && <p className="aviso">{extra.clima.temp}°C. {extra.clima.texto}</p>}
       <div className="row-btns detail-actions">
-        <button type="button" className="btn" onClick={onGo}>Cómo llegar</button>
         <ActionButton
           className="btn primary"
           state={gpsRouteState}
@@ -177,7 +222,7 @@ export function Detalle({ l, ciudad, onBack, onGo, onGoGPS, onFav, fav }) {
           errorLabel="No se obtuvo ubicación"
           onClick={comoLlegarDesdeGPS}
         >
-          Cómo llegar desde mi ubicación
+          Calcular ruta desde mi ubicación
         </ActionButton>
         <button
           type="button"
@@ -200,7 +245,6 @@ export function Detalle({ l, ciudad, onBack, onGo, onGoGPS, onFav, fav }) {
         </ActionButton>
         {tel && <a className="btn" href={tel}>Llamar</a>}
         <a className="btn-ghost" href={maps} target="_blank" rel="noreferrer">Google Maps</a>
-        <a className="btn-ghost" href={apple} target="_blank" rel="noreferrer">Maps del iPhone</a>
         <a className="btn-ghost" href={uber} target="_blank" rel="noreferrer">Uber</a>
       </div>
       {gpsRouteError && <p className="aviso error-message" role="alert">{gpsRouteError}</p>}

@@ -405,7 +405,6 @@ select.text-field { color-scheme: dark; }
 .badge.no { background: #3a1d22; color: #ffc0c8; }
 .badge.warn { background: #3a2e12; color: #ffd889; }
 .card-actions { margin-top: 14px; }
-.favorite-button[aria-pressed="true"] { border-color: #779a30; color: var(--accent); }
 
 .nav-shell {
   position: fixed;
@@ -485,6 +484,28 @@ select.text-field { color-scheme: dark; }
 .route-summary { margin: 0 0 10px; }
 .route-step { margin-bottom: 10px; }
 .detail-actions { align-items: center; }
+.voice-guidance {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(22, 16, 34, 0.72);
+}
+.voice-guidance .meta { margin: 0; }
+.voice-button {
+  justify-self: start;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #111;
+  font-weight: 700;
+}
+.voice-button.is-speaking {
+  background: var(--pink);
+  border-color: var(--pink);
+  color: #fff;
+}
 
 .compact-tools { position: relative; margin-top: 0; }
 .popover, .filter-popover {
@@ -564,19 +585,4 @@ select.text-field { color-scheme: dark; }
 .filter-toggle {
   margin-top: 0.35rem;
   font-size: 0.9rem;
-}
-
-/* Submenú de acciones secundarias en tarjeta */
-.card-submenu {
-  display: flex;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-  margin-top: 0.25rem;
-  padding-top: 0.25rem;
-  border-top: 1px dashed rgba(0,0,0,0.15);
-}
-.card-submenu .btn,
-.card-submenu .btn-ghost {
-  font-size: 0.82rem;
-  padding: 0.3rem 0.5rem;
 }
