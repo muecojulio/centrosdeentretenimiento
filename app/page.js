@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { CIUDADES, FILTROS } from "../lib/ciudades";
 import { estaAbierto, esAfter } from "../lib/enriquecer";
 import { ActionButton, ScrollRail, SearchableMultiCombobox, useActionFeedback } from "./ui-interactions";
 import { Tarjeta, Detalle, IndicacionesVoz } from "./ui-cards";
+import ContenidoPrivacidad from "./privacidad/contenido";
 
 const SECCIONES = [
   ["explorar", "Explorar"],
   ["favoritos", "Favoritos"],
   ["llegar", "Llegar"],
   ["instalar", "Instalar"],
+  ["privacidad", "Privacidad"],
 ];
 
 const OPCIONES_CIUDAD = CIUDADES.map((ciudad) => ({ value: ciudad.id, label: ciudad.nombre }));
@@ -60,6 +63,7 @@ export default function Page() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [radio, setRadio] = useState(3000);
   const [listoPrefs, setListoPrefs] = useState(false);
+  const [urlInstalacion, setUrlInstalacion] = useState("");
   const [textoGrande, setTextoGrande] = useState(false);
   const [sol, setSol] = useState(null);
   const [feriado, setFeriado] = useState(null);
@@ -76,6 +80,7 @@ export default function Page() {
   const mapRef = useRef(null);
 
   useEffect(() => {
+    setUrlInstalacion(new URL("/", window.location.href).toString());
     try {
       const raw = localStorage.getItem("nochecerca-favs");
       if (raw) setFavs(JSON.parse(raw));
@@ -686,11 +691,40 @@ export default function Page() {
             )}
 
             {panelTab === "instalar" && id === "instalar" && (
-              <section className="sheet" aria-labelledby="install-title">
-                <h2 id="install-title">Instalar</h2>
-                <p className="meta">
-                  <a href="/privacidad">Política de privacidad</a>
+              <section className="sheet install-sheet" aria-labelledby="install-title">
+                <h2 id="install-title">Instalar NocheCerca</h2>
+                <p className="install-intro">
+                  Escanea este código con la cámara de tu celular para abrir NocheCerca en ese dispositivo.
                 </p>
+                <div className="qr" aria-live="polite">
+                  {urlInstalacion
+                    ? <QRCodeSVG
+                        value={urlInstalacion}
+                        size={232}
+                        level="M"
+                        includeMargin
+                        title="Código QR para abrir NocheCerca"
+                        bgColor="#ffffff"
+                        fgColor="#0b0714"
+                      />
+                    : <p className="meta" role="status">Preparando el código QR…</p>}
+                </div>
+                <p className="meta install-help">
+                  Después de abrirla, usa el menú del navegador y elige «Instalar app» en Android o
+                  «Agregar a pantalla de inicio» en iPhone.
+                </p>
+                {urlInstalacion && (
+                  <p className="install-link">
+                    <a href={urlInstalacion}>{urlInstalacion}</a>
+                  </p>
+                )}
+              </section>
+            )}
+
+            {panelTab === "privacidad" && id === "privacidad" && (
+              <section className="sheet privacy-sheet" aria-labelledby="privacy-title">
+                <h2 id="privacy-title">Política de privacidad</h2>
+                <ContenidoPrivacidad headingLevel={3} />
               </section>
             )}
             </div>
