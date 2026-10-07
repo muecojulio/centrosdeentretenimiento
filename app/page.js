@@ -53,6 +53,7 @@ export default function Page() {
   const [rutaError, setRutaError] = useState("");
   const [rutaCargando, setRutaCargando] = useState(false);
   const [soloAbiertos, setSoloAbiertos] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [radio, setRadio] = useState(3000);
   const [listoPrefs, setListoPrefs] = useState(false);
   const [textoGrande, setTextoGrande] = useState(false);
@@ -470,7 +471,16 @@ export default function Page() {
                     </ActionButton>
                   </div>
 
-                  <div className="filter-controls">
+                  <button
+                    type="button"
+                    className="btn btn-ghost filter-toggle"
+                    aria-expanded={showAdvancedFilters}
+                    aria-controls="advanced-filters-panel"
+                    onClick={() => setShowAdvancedFilters((v) => !v)}
+                  >
+                    {showAdvancedFilters ? "▲ Ocultar filtros avanzados" : "▼ Filtros avanzados"}
+                  </button>
+                  <div id="advanced-filters-panel" className={showAdvancedFilters ? "filter-controls open" : "filter-controls collapsed"}>
                     <ScrollRail label="Categorías de lugares" className="chip-row" selectedKey={filtro}>
                       {FILTROS.map((item) => {
                         const selected = filtro === item.id;
