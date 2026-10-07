@@ -244,6 +244,54 @@ select.text-field { color-scheme: dark; }
 .combobox { position: relative; }
 .combobox input { padding-right: 52px; }
 .combobox.is-open input { border-color: var(--accent); border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+.combobox-control { position: relative; }
+.combobox-multiple { display: grid; gap: 6px; }
+.combobox-label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.combobox-clear {
+  min-height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.combobox-clear:hover { background: rgba(255,255,255,0.06); }
+.field-hint { color: var(--muted); font-size: 0.77rem; line-height: 1.4; }
+.combobox-selected { display: flex; flex-wrap: wrap; gap: 6px; }
+.combobox-selection {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card2);
+  color: var(--txt);
+  padding: 3px 4px 3px 10px;
+  font-size: 0.78rem;
+}
+.combobox-selection > span { overflow-wrap: anywhere; }
+.combobox-selection button {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.combobox-selection button:hover { background: rgba(255,255,255,0.09); color: var(--txt); }
+.combobox-multiple-option { justify-content: space-between; gap: 12px; }
+.combobox-option-indicator { min-width: 1.2em; color: var(--muted); text-align: center; font-weight: 800; }
+.combobox-multiple-option[aria-selected="true"] .combobox-option-indicator { color: var(--accent); }
 .combobox-toggle {
   position: absolute;
   top: 2px;
@@ -510,7 +558,8 @@ select.text-field { color-scheme: dark; }
   display: none;
 }
 .filter-controls.open {
-  display: block;
+  display: grid;
+  gap: 12px;
 }
 .filter-toggle {
   margin-top: 0.35rem;

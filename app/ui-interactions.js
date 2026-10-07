@@ -388,3 +388,242 @@ export function SearchableCombobox({
     </div>
   );
 }
+
+export function SearchableMultiCombobox({
+  id,
+  label,
+  options,
+  values = [],
+  onChange,
+  onCommit,
+  placeholder = "Escribe para filtrar",
+  description,
+}) {
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+  const optionRefs = useRef([]);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [hasTyped, setHasTyped] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const listId = `${id}-options`;
+  const labelId = `${id}-label`;
+  const onCommitRef = useRef(onCommit);
+  const valuesRef = useRef(Array.isArray(values) ? values : []);
+  const valuesAtOpenRef = useRef(valuesRef.current);
+  onCommitRef.current = onCommit;
+  valuesRef.current = Array.isArray(values) ? values : [];
+  const safeValues = valuesRef.current;
+  const selectedValues = useMemo(() => new Set(safeValues), [safeValues]);
+  const selectedOptions = options.filter((option) => selectedValues.has(option.value));
+
+  const filteredOptions = useMemo(() => {
+    if (!hasTyped || !query.trim()) return options;
+    const normalizedQuery = normalizeForSearch(query.trim());
+    return options.filter((option) => normalizeForSearch(option.label).includes(normalizedQuery));
+  }, [hasTyped, options, query]);
+
+  const activeOption = open && activeIndex >= 0 ? filteredOptions[activeIndex] : null;
+
+  function showMenu() {
+    if (open) return;
+    valuesAtOpenRef.current = [...valuesRef.current];
+    setQuery("");
+    setHasTyped(false);
+    setActiveIndex(options.length ? 0 : -1);
+    setOpen(true);
+  }
+
+  function closeMenu() {
+    setOpen(false);
+    setQuery("");
+    setHasTyped(false);
+    setActiveIndex(-1);
+    const valuesAtOpen = valuesAtOpenRef.current;
+    const currentValues = valuesRef.current;
+    const changed = valuesAtOpen.length !== currentValues.length
+      || valuesAtOpen.some((value, index) => value !== currentValues[index]);
+    if (changed) onCommitRef.current?.();
+  }
+
+  function toggleOption(option) {
+    const nextValues = selectedValues.has(option.value)
+      ? safeValues.filter((value) => value !== option.value)
+      : [...safeValues, option.value];
+    onChange(nextValues);
+  }
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handleOutsidePointerDown(event) {
+      if (!rootRef.current?.contains(event.target)) closeMenu();
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || activeIndex < 0) return;
+    optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, open]);
+
+  function moveActive(direction) {
+    if (!open) {
+      setQuery("");
+      setHasTyped(false);
+      setOpen(true);
+      setActiveIndex(options.length ? (direction > 0 ? 0 : options.length - 1) : -1);
+      return;
+    }
+
+    if (filteredOptions.length === 0) return;
+    setActiveIndex((current) => {
+      if (current < 0) return direction > 0 ? 0 : filteredOptions.length - 1;
+      return (current + direction + filteredOptions.length) % filteredOptions.length;
+    });
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveActive(1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveActive(-1);
+    } else if (event.key === "Home" && open) {
+      event.preventDefault();
+      setActiveIndex(filteredOptions.length ? 0 : -1);
+    } else if (event.key === "End" && open) {
+      event.preventDefault();
+      setActiveIndex(filteredOptions.length - 1);
+    } else if (event.key === "Enter" && open) {
+      event.preventDefault();
+      if (activeOption) toggleOption(activeOption);
+      else if (filteredOptions.length === 1) toggleOption(filteredOptions[0]);
+    } else if (event.key === "Escape" && open) {
+      event.preventDefault();
+      closeMenu();
+    } else if (event.key === "Tab" && open) {
+      closeMenu();
+    } else if (event.key === "Backspace" && !query && safeValues.length > 0) {
+      onChange(safeValues.slice(0, -1));
+    }
+  }
+
+  return (
+    <div className="field combobox-field multi-combobox-field" ref={rootRef}>
+      <div className="combobox-label-row">
+        <label className="field-label" id={labelId} htmlFor={id}>{label}</label>
+        {safeValues.length > 0 && (
+          <button type="button" className="combobox-clear" onClick={() => onChange([])}>
+            Limpiar
+          </button>
+        )}
+      </div>
+      <div className={`combobox combobox-multiple${open ? " is-open" : ""}`}>
+        <div className="combobox-control">
+          <input
+            ref={inputRef}
+            id={id}
+            type="text"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-controls={listId}
+            aria-activedescendant={activeOption ? `${id}-option-${activeIndex}` : undefined}
+            aria-labelledby={labelId}
+            aria-describedby={description ? `${id}-description` : undefined}
+            autoComplete="off"
+            placeholder={placeholder}
+            value={query}
+            onFocus={showMenu}
+            onClick={showMenu}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setHasTyped(true);
+              setActiveIndex(event.target.value.trim() ? 0 : options.length ? 0 : -1);
+              setOpen(true);
+            }}
+            onKeyDown={handleKeyDown}
+          />
+          <button
+            type="button"
+            className="combobox-toggle"
+            aria-label={open ? `Cerrar opciones de ${label.toLocaleLowerCase("es-MX")}` : `Mostrar opciones de ${label.toLocaleLowerCase("es-MX")}`}
+            aria-expanded={open}
+            aria-controls={listId}
+            onPointerDown={(event) => {
+              if (event.pointerType === "mouse") event.preventDefault();
+            }}
+            onClick={() => {
+              if (open) closeMenu();
+              else {
+                inputRef.current?.focus();
+                showMenu();
+              }
+            }}
+          >
+            <span aria-hidden="true">{open ? "⌃" : "⌄"}</span>
+          </button>
+          <ul
+            id={listId}
+            className="combobox-list"
+            role="listbox"
+            aria-labelledby={labelId}
+            aria-multiselectable="true"
+            hidden={!open}
+          >
+            {filteredOptions.length > 0 ? filteredOptions.map((option, index) => {
+              const selected = selectedValues.has(option.value);
+              return (
+                <li
+                  key={option.value}
+                  id={`${id}-option-${index}`}
+                  ref={(node) => { optionRefs.current[index] = node; }}
+                  className="combobox-option combobox-multiple-option"
+                  role="option"
+                  aria-selected={selected}
+                  data-active={index === activeIndex ? "true" : undefined}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => toggleOption(option)}
+                >
+                  <span>{option.label}</span>
+                  <span className="combobox-option-indicator" aria-hidden="true">{selected ? "✓" : "+"}</span>
+                </li>
+              );
+            }) : (
+              <li className="combobox-empty" role="presentation">No hay coincidencias.</li>
+            )}
+          </ul>
+        </div>
+        {selectedOptions.length > 0 && (
+          <div className="combobox-selected" role="group" aria-label={`Opciones seleccionadas de ${label}`}>
+            {selectedOptions.map((option) => (
+              <span className="combobox-selection" key={option.value}>
+                <span>{option.label}</span>
+                <button
+                  type="button"
+                  aria-label={`Quitar ${option.label}`}
+                  onClick={() => onChange(safeValues.filter((value) => value !== option.value))}
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {description && <span className="field-hint" id={`${id}-description`}>{description}</span>}
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {open
+          ? filteredOptions.length === 0
+            ? "No hay coincidencias."
+            : `${filteredOptions.length} ${filteredOptions.length === 1 ? "opción disponible" : "opciones disponibles"}. ${safeValues.length} ${safeValues.length === 1 ? "seleccionada" : "seleccionadas"}.`
+          : `${safeValues.length} ${safeValues.length === 1 ? "opción seleccionada" : "opciones seleccionadas"}.`}
+      </span>
+    </div>
+  );
+}

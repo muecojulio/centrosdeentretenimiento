@@ -21,6 +21,7 @@ export function Tarjeta({ l, fav, enComparar, onFav, onGo, onOpen, onComp }) {
       <h3>{l.nombre}</h3>
       <div className="badges">
         <span className="badge">{l.tipoEtiqueta}</span>
+        {l.ciudadNombre && <span className="badge">{l.ciudadNombre}</span>}
         {abierto === true && <span className="badge ok">Abierto ahora</span>}
         {abierto === false && <span className="badge no">Cerrado ahora</span>}
         {l.live && <span className="badge ok">En vivo (mapa)</span>}
@@ -80,12 +81,14 @@ export function Tarjeta({ l, fav, enComparar, onFav, onGo, onOpen, onComp }) {
   );
 }
 
-export function Detalle({ l, ciudad, onBack, onGo, onFav, fav }) {
+export function Detalle({ l, ciudad, onBack, onGo, onGoGPS, onFav, fav }) {
   const abierto = estaAbierto(l.horario);
   const [extra, setExtra] = useState(null);
   const [shareState, setShareState] = useActionFeedback();
   const [shareSuccessLabel, setShareSuccessLabel] = useState("Compartido");
   const [shareError, setShareError] = useState("");
+  const [gpsRouteState, setGpsRouteState] = useActionFeedback();
+  const [gpsRouteError, setGpsRouteError] = useState("");
 
   useEffect(() => {
     let vivo = true;
@@ -100,6 +103,33 @@ export function Detalle({ l, ciudad, onBack, onGo, onFav, fav }) {
   const apple = `https://maps.apple.com/?daddr=${l.lat},${l.lon}`;
   const uber = `https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${l.lat}&dropoff[longitude]=${l.lon}&dropoff[nickname]=${encodeURIComponent(l.nombre)}`;
   const tel = l.telefono ? "tel:" + String(l.telefono).replace(/\s/g, "") : null;
+
+  function comoLlegarDesdeGPS() {
+    setGpsRouteError("");
+    if (!navigator.geolocation) {
+      setGpsRouteError("Este dispositivo no permite compartir su ubicación.");
+      setGpsRouteState("error");
+      return;
+    }
+
+    setGpsRouteState("loading");
+    navigator.geolocation.getCurrentPosition((position) => {
+      setGpsRouteState("success");
+      onGoGPS({
+        lat: position.coords.latitude,
+        lon: position.coords.longitude,
+        etiqueta: "Mi ubicación",
+      });
+    }, (gpsError) => {
+      const message = gpsError.code === 1
+        ? "No se concedió el permiso de ubicación. Actívalo en el navegador e inténtalo de nuevo."
+        : gpsError.code === 3
+          ? "La ubicación tardó demasiado. Inténtalo de nuevo."
+          : "No se pudo obtener tu ubicación. Revisa el permiso o inténtalo de nuevo.";
+      setGpsRouteError(message);
+      setGpsRouteState("error");
+    }, { enableHighAccuracy: true, maximumAge: 120000, timeout: 15000 });
+  }
 
   async function compartir() {
     const text = `${l.nombre} — ${l.direccion || extra?.direccion || ""}`;
@@ -138,7 +168,17 @@ export function Detalle({ l, ciudad, onBack, onGo, onFav, fav }) {
       {dato(l.telefono || extra?.wikidata?.tel, "Teléfono")}
       {extra?.clima && <p className="aviso">{extra.clima.temp}°C. {extra.clima.texto}</p>}
       <div className="row-btns detail-actions">
-        <button type="button" className="btn primary" onClick={onGo}>Cómo llegar</button>
+        <button type="button" className="btn" onClick={onGo}>Cómo llegar</button>
+        <ActionButton
+          className="btn primary"
+          state={gpsRouteState}
+          loadingLabel="Obteniendo ubicación…"
+          successLabel="Calculando ruta…"
+          errorLabel="No se obtuvo ubicación"
+          onClick={comoLlegarDesdeGPS}
+        >
+          Cómo llegar desde mi ubicación
+        </ActionButton>
         <button
           type="button"
           className="btn"
@@ -163,8 +203,9 @@ export function Detalle({ l, ciudad, onBack, onGo, onFav, fav }) {
         <a className="btn-ghost" href={apple} target="_blank" rel="noreferrer">Maps del iPhone</a>
         <a className="btn-ghost" href={uber} target="_blank" rel="noreferrer">Uber</a>
       </div>
+      {gpsRouteError && <p className="aviso error-message" role="alert">{gpsRouteError}</p>}
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {shareState === "success" ? shareSuccessLabel : ""}
+        {shareState === "success" ? shareSuccessLabel : gpsRouteState === "success" ? "Ubicación lista. Calculando la ruta." : ""}
       </span>
       {shareError && <p className="aviso error-message" role="alert">{shareError}</p>}
       <p className="aviso">No inventamos reseñas ni estrellas. Si el local no las publicó en el mapa o Wikipedia, queda vacío a propósito.</p>
