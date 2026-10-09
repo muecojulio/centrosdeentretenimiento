@@ -2,15 +2,42 @@ export const dynamic = "force-dynamic";
 
 const UA = { "User-Agent": "NocheCerca/1.0 (app personal; datos publicos)" };
 
+const BLOQUEO_HOST = /^(localhost|127\.|0\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?[fF][cCdD]|::1|metadata\.google|169\.254\.169\.254)/i;
+
+function esCoordenadaValida(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= -180 && n <= 180;
+}
+
+function esUrlSegura(rawUrl) {
+  if (!/^https?:\/\//i.test(rawUrl)) return false;
+  try {
+    const u = new URL(rawUrl);
+    if (!/^https?:$/.test(u.protocol)) return false;
+    if (BLOQUEO_HOST.test(u.hostname)) return false;
+    if (u.port && !["80", "443", ""].includes(u.port)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const nombre = searchParams.get("nombre") || "";
-  const lat = searchParams.get("lat");
-  const lon = searchParams.get("lon");
-  const ciudad = searchParams.get("ciudad") || "México";
-  const web = searchParams.get("web") || "";
-  const wikidata = searchParams.get("wikidata") || "";
-  const wikipedia = searchParams.get("wikipedia") || "";
+  const nombre = (searchParams.get("nombre") || "").slice(0, 200);
+  const rawLat = searchParams.get("lat");
+  const rawLon = searchParams.get("lon");
+  const latValido = esCoordenadaValida(rawLat);
+  const lonValido = esCoordenadaValida(rawLon);
+  const lat = latValido ? Number(rawLat) : null;
+  const lon = lonValido ? Number(rawLon) : null;
+  const ciudad = (searchParams.get("ciudad") || "México").slice(0, 100);
+  const rawWeb = (searchParams.get("web") || "").slice(0, 2000);
+  const web = esUrlSegura(rawWeb) ? rawWeb : "";
+  const rawWikidata = (searchParams.get("wikidata") || "").trim().toUpperCase();
+  const wikidata = /^Q\d+$/.test(rawWikidata) ? rawWikidata : "";
+  const rawWikipedia = (searchParams.get("wikipedia") || "").trim().slice(0, 300);
+  const wikipedia = /^[A-Za-z0-9 _\-:]+$/.test(rawWikipedia) ? rawWikipedia : "";
   const out = { wiki: null, wikidata: null, sitio: null, direccion: null, clima: null, aire: null, fuentes: [] };
 
   if (wikidata) {
@@ -53,7 +80,7 @@ export async function GET(request) {
     } catch {}
   }
 
-  if (web && /^https?:\/\//i.test(web)) {
+  if (web) {
     try {
       out.sitio = await leerSitio(web);
       if (out.sitio?.texto || out.sitio?.titulo) out.fuentes.push("Sitio oficial");
@@ -130,13 +157,28 @@ function primerValor(ent, prop) {
 }
 
 async function leerSitio(url) {
+  if (!esUrlSegura(url)) return null;
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 6000);
+  const t = setTimeout(() => ctrl.abort(), 5000);
   try {
-    const res = await fetch(url, { headers: UA, signal: ctrl.signal, redirect: "follow" });
-    if (!res.ok) return null;
+    const res = await fetch(url, {
+      headers: { ...UA, "Accept": "text/html,application/xhtml+xml" },
+      signal: ctrl.signal,
+      redirect: "manual",
+      size: 90000,
+    });
+    if (!res.ok || res.status >= 300 && res.status < 400) return null;
+    const ct = res.headers.get("content-type") || "";
+    if (!/html/i.test(ct)) return null;
     const html = (await res.text()).slice(0, 80000);
-    return { titulo: meta(html, "og:title") || tag(html, "title"), texto: meta(html, "og:description") || meta(html, "description"), foto: meta(html, "og:image"), url };
+    return {
+      titulo: meta(html, "og:title") || tag(html, "title"),
+      texto: meta(html, "og:description") || meta(html, "description"),
+      foto: meta(html, "og:image"),
+      url
+    };
+  } catch {
+    return null;
   } finally {
     clearTimeout(t);
   }

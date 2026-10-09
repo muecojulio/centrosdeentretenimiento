@@ -350,48 +350,70 @@ export default function Page() {
   useEffect(() => {
     if (tab !== "llegar") return undefined;
     let cancelled = false;
+    let map = null;
     (async () => {
-      if (!window.L) {
-        await new Promise((resolve) => {
-          const script = document.createElement("script");
-          script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-          script.onload = resolve;
-          script.onerror = resolve;
-          document.body.appendChild(script);
-        });
-      }
-      if (cancelled || !window.L || !mapBox.current) return;
+      const L = (await import("leaflet")).default;
+      // Usamos assets locales copiados en /public para no depender del CDN de Leaflet.
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "/marker-icon-2x.png",
+        iconUrl: "/marker-icon.png",
+        shadowUrl: "/marker-shadow.png",
+      });
+      if (cancelled || !mapBox.current) return;
       if (mapRef.current) {
         try { mapRef.current.remove(); } catch {}
       }
-      const map = window.L.map(mapBox.current);
+      map = L.map(mapBox.current);
       mapRef.current = map;
-      window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap",
+        maxZoom: 19,
       }).addTo(map);
 
       const puntoSalida = rutaOrigen || origen;
       const posiciones = [[puntoSalida.lat, puntoSalida.lon]];
       if (sel) posiciones.push([sel.lat, sel.lon]);
-      const bounds = window.L.latLngBounds(posiciones);
+      const bounds = L.latLngBounds(posiciones);
       if (posiciones.length > 1 && bounds.isValid()) {
         map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
       } else {
         map.setView(posiciones[0] || [origen.lat, origen.lon], 14);
       }
 
-      window.L.marker([puntoSalida.lat, puntoSalida.lon])
+      const iconoSalida = L.divIcon({
+        className: "map-marker marker-salida",
+        html: '<span aria-hidden="true">🚶</span>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      });
+      const iconoDestino = L.divIcon({
+        className: "map-marker marker-destino",
+        html: '<span aria-hidden="true">📍</span>',
+        iconSize: [40, 40],
+        iconAnchor: [20, 36],
+      });
+      L.marker([puntoSalida.lat, puntoSalida.lon], { icon: iconoSalida })
         .addTo(map)
         .bindPopup(`Partida: ${puntoSalida.nombre || puntoSalida.etiqueta}`);
       if (sel) {
-        window.L.marker([sel.lat, sel.lon]).addTo(map).bindPopup(sel.nombre);
+        L.marker([sel.lat, sel.lon], { icon: iconoDestino }).addTo(map).bindPopup(sel.nombre);
         const coordenadasRuta = ruta?.geometria?.coordinates;
         if (Array.isArray(coordenadasRuta)) {
-          window.L.polyline(coordenadasRuta.map(([lon, lat]) => [lat, lon]), { color: "#c8ff4d", weight: 5 }).addTo(map);
+          L.polyline(coordenadasRuta.map(([lon, lat]) => [lat, lon]), {
+            color: "#c8ff4d",
+            weight: 6,
+            lineCap: "round",
+            lineJoin: "round",
+            opacity: 0.9,
+          }).addTo(map);
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (map) { try { map.remove(); } catch {} }
+    };
   }, [tab, origen, rutaOrigen, sel, ruta]);
 
   function cambiarSeccion(nextTab, focusTab = false) {
@@ -484,7 +506,7 @@ export default function Page() {
       <header className="top">
         <div className="logo">
           <b>NocheCerca</b>
-          <span>¿A dónde salimos hoy?</span>
+          <span>¿A dónde salimos hoy? 🎉</span>
         </div>
         <button
           type="button"
@@ -494,9 +516,17 @@ export default function Page() {
           onClick={() => setTextoGrande((value) => !value)}
         >
           <span className="track" aria-hidden="true"><span className="thumb" /></span>
-          <span>Texto grande</span>
+          <span>A+ Texto grande</span>
         </button>
       </header>
+
+      <div className="hero-strip" role="presentation" aria-hidden="true">
+        <span className="chip-on">🌆 Bares</span>
+        <span className="chip-on pink">🕺 Antros</span>
+        <span className="chip-on cyan">🎵 Live</span>
+        <span className="chip-on purple">🌙 Afters</span>
+        <span className="chip-on warn">🍹 Terrazas</span>
+      </div>
 
       {sol?.texto && <div className="banner">{sol.texto}</div>}
       {feriado?.hoyEsFeriado && <div className="banner">Feriado en México.</div>}

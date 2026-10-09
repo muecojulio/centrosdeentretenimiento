@@ -13,30 +13,43 @@ export function dato(valor, etiqueta) {
   );
 }
 
+const ACCENT_BY_TIPO = {
+  antro: "pink-accent",
+  vivo: "cyan-accent",
+  table: "purple-accent",
+  bar: "",
+  "restaurant-bar": "",
+};
+
 export function Tarjeta({ l, onOpen }) {
   const abierto = estaAbierto(l.horario);
+  const accent = ACCENT_BY_TIPO[l.tipo] || "";
+  const badgeColor =
+    l.tipo === "antro" ? "badge pink" :
+    l.tipo === "vivo" ? "badge cyan" :
+    l.tipo === "table" ? "badge purple" : "badge";
   return (
-    <article className="card venue-card">
+    <article className={`card venue-card tipo-${l.tipo} ${accent}`.trim()}>
       <h3>{l.nombre}</h3>
       <div className="badges">
-        <span className="badge">{l.tipoEtiqueta}</span>
-        {l.ciudadNombre && <span className="badge">{l.ciudadNombre}</span>}
-        {abierto === true && <span className="badge ok">Abierto ahora</span>}
+        <span className={badgeColor}>{l.tipoEtiqueta}</span>
+        {l.ciudadNombre && <span className="badge">📍 {l.ciudadNombre}</span>}
+        {abierto === true && <span className="badge ok pulse">Abierto ahora</span>}
         {abierto === false && <span className="badge no">Cerrado ahora</span>}
-        {l.live && <span className="badge ok">En vivo (mapa)</span>}
-        {(l.after || esAfter(l.horario, l.tipo, l.nombre)) && <span className="badge warn">After / madrugada</span>}
-        {(l.tableDance || l.tipo === "table") && <span className="badge warn">Table dance</span>}
+        {l.live && <span className="badge ok">🎶 En vivo</span>}
+        {(l.after || esAfter(l.horario, l.tipo, l.nombre)) && <span className="badge warn">🌙 After</span>}
+        {(l.tableDance || l.tipo === "table") && <span className="badge warn">💋 Table dance</span>}
         {l.fuente === "INEGI DENUE" && <span className="badge ok">INEGI</span>}
       </div>
       <p className="meta">
-        {textoDistancia(l.metros) ? `${textoDistancia(l.metros)} · ` : ""}
+        {textoDistancia(l.metros) ? `📍 ${textoDistancia(l.metros)} · ` : ""}
         {textoTiempo(l) ? `${textoTiempo(l)} · ` : ""}
         {l.direccion || ""}
       </p>
-      {dato(l.coverTexto, "Cover")}
-      {dato(l.musica, "Música")}
+      {dato(l.coverTexto, "🎟️ Cover")}
+      {dato(l.musica, "🎵 Música")}
       <div className="row-btns card-actions">
-        <button type="button" className="btn primary" onClick={onOpen}>Ver ficha</button>
+        <button type="button" className="btn primary" onClick={onOpen}>✨ Ver ficha</button>
       </div>
     </article>
   );
@@ -202,17 +215,28 @@ export function Detalle({ l, ciudad, onBack, onGoGPS, onFav, fav }) {
     }
   }
 
+  const estadoAbierto = abierto === true
+    ? { texto: "🟢 Abierto en este momento (según el horario del mapa).", clase: "badge ok pulse" }
+    : abierto === false
+      ? { texto: "🔴 Cerrado en este momento (según el horario del mapa).", clase: "badge no" }
+      : { texto: "⚪ Horario no publicado en el mapa.", clase: "badge" };
+
   return (
     <section className="sheet detail-sheet" aria-labelledby="detail-title">
       <button type="button" className="btn-ghost back-button" onClick={onBack}>← Volver</button>
       <h2 id="detail-title" tabIndex={-1}>{l.nombre}</h2>
-      <p>{abierto === true ? "Abierto en este momento (según el horario del mapa)." : abierto === false ? "Cerrado en este momento (según el horario del mapa)." : "Horario no publicado en el mapa."}</p>
-      {dato(l.tipoEtiqueta, "Tipo")}
-      {dato(l.direccion || extra?.direccion, "Ubicación")}
-      {dato(textoDistancia(l.metros), "Distancia")}
-      {dato(l.horario, "Horario")}
-      {dato(l.telefono || extra?.wikidata?.tel, "Teléfono")}
-      {extra?.clima && <p className="aviso">{extra.clima.temp}°C. {extra.clima.texto}</p>}
+      <p><span className={estadoAbierto.clase}>{estadoAbierto.texto}</span></p>
+      {dato(l.tipoEtiqueta, "🎭 Tipo")}
+      {dato(l.direccion || extra?.direccion, "📍 Ubicación")}
+      {dato(textoDistancia(l.metros), "🚶 Distancia")}
+      {dato(l.horario, "🕒 Horario")}
+      {dato(l.telefono || extra?.wikidata?.tel, "📞 Teléfono")}
+      {extra?.aire && (
+        <p className="aviso">
+          🌬️ Calidad del aire: <b>{extra.aire.texto}</b> (AQI {extra.aire.aqi})
+        </p>
+      )}
+      {extra?.clima && <p className="aviso">🌤️ {extra.clima.temp}°C. {extra.clima.texto}</p>}
       <div className="row-btns detail-actions">
         <ActionButton
           className="btn primary"
@@ -222,37 +246,37 @@ export function Detalle({ l, ciudad, onBack, onGoGPS, onFav, fav }) {
           errorLabel="No se obtuvo ubicación"
           onClick={comoLlegarDesdeGPS}
         >
-          Calcular ruta desde mi ubicación
+          🧭 Calcular ruta desde mi ubicación
         </ActionButton>
         <button
           type="button"
-          className="btn"
+          className={fav ? "btn pink" : "btn purple"}
           aria-pressed={Boolean(fav)}
           aria-label={fav ? `Quitar ${l.nombre} de favoritos` : `Guardar ${l.nombre} en favoritos`}
           onClick={onFav}
         >
-          {fav ? "Quitar de favoritos" : "Guardar"}
+          {fav ? "❤️ Quitar de favoritos" : "🤍 Guardar"}
         </button>
         <ActionButton
-          className="btn"
+          className="btn cyan"
           state={shareState}
           loadingLabel="Compartiendo…"
           successLabel={shareSuccessLabel}
           errorLabel="No se compartió"
           onClick={compartir}
         >
-          Compartir
+          🔗 Compartir
         </ActionButton>
-        {tel && <a className="btn" href={tel}>Llamar</a>}
-        <a className="btn-ghost" href={maps} target="_blank" rel="noreferrer">Google Maps</a>
-        <a className="btn-ghost" href={uber} target="_blank" rel="noreferrer">Uber</a>
+        {tel && <a className="btn" href={tel}>📞 Llamar</a>}
+        <a className="btn-ghost" href={maps} target="_blank" rel="noopener noreferrer">🗺️ Google Maps</a>
+        <a className="btn-ghost" href={uber} target="_blank" rel="noopener noreferrer">🚗 Uber</a>
       </div>
       {gpsRouteError && <p className="aviso error-message" role="alert">{gpsRouteError}</p>}
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {shareState === "success" ? shareSuccessLabel : gpsRouteState === "success" ? "Ubicación lista. Calculando la ruta." : ""}
       </span>
       {shareError && <p className="aviso error-message" role="alert">{shareError}</p>}
-      <p className="aviso">No inventamos reseñas ni estrellas. Si el local no las publicó en el mapa o Wikipedia, queda vacío a propósito.</p>
+      <p className="aviso">💡 No inventamos reseñas ni estrellas. Si el local no las publicó en el mapa o Wikipedia, queda vacío a propósito. Confirma horarios y cover en puerta antes de salir.</p>
     </section>
   );
 }

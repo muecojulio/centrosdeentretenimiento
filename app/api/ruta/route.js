@@ -1,20 +1,32 @@
 export const dynamic = "force-dynamic";
 
+function esCoordenadaValida(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= -180 && n <= 180;
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const fromLat = searchParams.get("fromLat");
   const fromLon = searchParams.get("fromLon");
   const toLat = searchParams.get("toLat");
   const toLon = searchParams.get("toLon");
-  const perfil = searchParams.get("perfil") === "foot" ? "foot" : "driving";
+  const rawPerfil = searchParams.get("perfil");
+  const perfil = rawPerfil === "foot" ? "foot" : "driving";
 
-  if (![fromLat, fromLon, toLat, toLon].every(Boolean)) {
-    return Response.json({ error: "Faltan puntos" }, { status: 400 });
+  if (!esCoordenadaValida(fromLat) || !esCoordenadaValida(fromLon) ||
+      !esCoordenadaValida(toLat) || !esCoordenadaValida(toLon)) {
+    return Response.json({ error: "Coordenadas inválidas" }, { status: 400 });
   }
+
+  const fLat = Number(fromLat);
+  const fLon = Number(fromLon);
+  const tLat = Number(toLat);
+  const tLon = Number(toLon);
 
   try {
     const osrmProfile = perfil === "foot" ? "driving" : perfil;
-    const url = `https://router.project-osrm.org/route/v1/${osrmProfile}/${fromLon},${fromLat};${toLon},${toLat}?overview=full&geometries=geojson&steps=true&alternatives=false`;
+    const url = `https://router.project-osrm.org/route/v1/${osrmProfile}/${fLon},${fLat};${tLon},${tLat}?overview=full&geometries=geojson&steps=true&alternatives=false`;
     const res = await fetch(url, { headers: { "User-Agent": "NocheCerca/1.0" } });
     const data = await res.json();
     const route = data.routes?.[0];
@@ -24,7 +36,7 @@ export async function GET(request) {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Client-Id": "nochecerca" },
       body: JSON.stringify({
-        locations: [{ lat: Number(fromLat), lon: Number(fromLon) }, { lat: Number(toLat), lon: Number(toLon) }],
+        locations: [{ lat: fLat, lon: fLon }, { lat: tLat, lon: tLon }],
         costing: perfil === "foot" ? "pedestrian" : "auto",
         units: "kilometers",
         shape_format: "geojson",
