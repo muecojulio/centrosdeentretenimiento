@@ -1,16 +1,27 @@
 # NocheCerca / centrosdeentretenimiento
 
-PWA de bares y centros nocturnos en México. Lista para Vercel.
+🌃 **PWA vibrante** para encontrar bares, antros, música en vivo, afters y terrazas en México.
+Diseño neón con auroras animadas, tarjetas con gradientes, micro-interacciones y mapa
+interactivo con ruta trazada. Lista para Vercel.
 
-Node: `engines.node = 24.x` en `package.json`. Next.js y React están fijados en `package-lock.json` para que la instalación en Vercel sea reproducible.
+Node: `engines.node = 24.x` en `package.json`. Next.js 16 + React 19.
 
-Repo privado: https://github.com/muecojulio/centrosdeentretenimiento
+Repo: https://github.com/muecojulio/centrosdeentretenimiento
 
-Privacidad: `/privacidad`
+Privacidad: `/privacidad` · Seguridad: `SECURITY.md`
 
-No hay base SQL. Se usó caché + índices en memoria (id, tipo, fuente).
+Sin base de datos. Caché + índices en memoria (id, tipo, fuente). PWA instalable en Android,
+iPhone, tablet y escritorio (pantalla completa, soporte offline básico).
 
-App instalable en celular Android, iPhone, tablet y computadora (PWA a pantalla completa).
+## 🛡️ Seguridad
+- Cabeceras estrictas: `Content-Security-Policy`, `Strict-Transport-Security` (HSTS preload),
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Permissions-Policy` que bloquea
+  micrófono, cámara, pago, USB y sensores.
+- Validación de coordenadas en todas las rutas API y límites de tamaño en los parámetros.
+- Protección SSRF en el scraping de sitios (bloqueo de localhost/IPs privadas/metadata, límite
+  de tiempo, solo HTML).
+- Leaflet se distribuye con la app (sin CDN en runtime) para eliminar riesgos de supply-chain.
+- Sin cookies de sesión, sin cuentas, sin analítica ni publicidad. Ver `SECURITY.md`.
 
 ## ¿Requiere key?
 

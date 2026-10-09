@@ -1,4 +1,5 @@
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 
 export const metadata = {
   title: "NocheCerca",
@@ -10,7 +11,7 @@ export const metadata = {
     title: "NocheCerca",
     statusBarStyle: "black-translucent",
   },
-  formatDetection: { telephone: false },
+  formatDetection: { telephone: false, email: false, address: false },
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -25,6 +26,7 @@ export const viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: "#0b0714",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({ children }) {
@@ -36,7 +38,6 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-icon" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       </head>
       <body>{children}</body>
     </html>

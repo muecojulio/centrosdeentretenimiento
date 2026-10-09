@@ -1,10 +1,17 @@
 export const dynamic = "force-dynamic";
 
+function esCoordenadaValida(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= -180 && n <= 180;
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const lat = searchParams.get("lat");
-  const lon = searchParams.get("lon");
-  if (!lat || !lon) return Response.json({ ok: false });
+  const lat = Number(searchParams.get("lat"));
+  const lon = Number(searchParams.get("lon"));
+  if (!esCoordenadaValida(lat) || !esCoordenadaValida(lon)) {
+    return Response.json({ ok: false }, { status: 400 });
+  }
   try {
     const r = await fetch(
       `https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&formatted=0`

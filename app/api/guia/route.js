@@ -2,8 +2,12 @@ export const dynamic = "force-dynamic";
 
 const UA = { "User-Agent": "NocheCerca/1.0 (app personal)" };
 
+// Permitimos solo títulos de Wikivoyage (letras, números, guiones, subrayados, paréntesis, acentos y espacios).
+const PAGE_RE = /^[A-Za-z0-9_\-ÁÉÍÓÚáéíóúÑñÜü() .,'´]+$/;
+
 export async function GET(request) {
-  const page = request.nextUrl.searchParams.get("page") || "Ciudad_de_México";
+  const rawPage = request.nextUrl.searchParams.get("page") || "Ciudad_de_México";
+  const page = PAGE_RE.test(rawPage) ? rawPage.slice(0, 120) : "Ciudad_de_México";
   try {
     const sum = await fetch(
       "https://es.wikivoyage.org/api/rest_v1/page/summary/" + encodeURIComponent(page),
